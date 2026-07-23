@@ -1,0 +1,45 @@
+name: Update GFW rule-set
+
+on:
+  schedule:
+    # 每天 UTC 00:20 运行（北京时间 08:20）
+    - cron: '20 0 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Generate rules/gfw.json from gfwlist
+        run: python3 scripts/generate_gfw_json.py
+
+      - name: Install sing-box 1.11.15
+        run: |
+          curl -fsSL https://sing-box.app/install.sh | sh -s -- --version 1.11.15
+          sing-box version
+
+      - name: Compile rules/gfw.srs
+        run: sing-box rule-set compile --output rules/gfw.srs rules/gfw.json
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rules/gfw.json rules/gfw.srs
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update gfw rule-set ($(date -u +'%Y-%m-%d'))"
+          git push
